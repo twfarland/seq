@@ -30,5 +30,17 @@ function handleMidi(message: Output, midiOutput: MIDIOutput) {
     case "stopped":
       midiOutput.send([0xfc]); // MIDI Stop message
       break;
+    case "note_on":
+      midiOutput.send(
+        [0x90 + (message.channel - 1), message.note, message.velocity],
+        message.time
+      );
+      break;
+    case "note_off":
+      midiOutput.send(
+        [0x80 + (message.channel - 1), message.note, 0x00],
+        message.time
+      );
+      break;
   }
 }

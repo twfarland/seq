@@ -23,9 +23,6 @@ export function MetronomeControl({ midiOutput }: MetronomeControlProps) {
   createEffect(() => {
     const message = output();
     if (message?.type === "tick") {
-      console.log(
-        `Tick at time ${message.time}, playhead: ${message.playhead}`
-      );
       // Send MIDI message or handle other actions
     }
   });
