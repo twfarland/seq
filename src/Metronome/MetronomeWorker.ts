@@ -94,7 +94,7 @@ function scheduleTicks() {
     // Then check if we hit a step boundary => note on
     handleNoteOns(performance.now());
 
-    // Post a tick message (for UI / debugging)
+    // Post a tick message (for UI / debugging). Only on step boundaries.
     postTickMessage(performance.now());
 
     elapsed = performance.now() - lastTickTime;
@@ -133,6 +133,8 @@ function handleNoteOns(currentTime: number) {
   // e.g., step boundary every `pulsesPerStep()` pulses
   if (pulseCount % pulsesPerStep() === 0) {
     const stepIndex = (pulseCount / pulsesPerStep()) % steps;
+    postStepMessage(stepIndex, currentTime);
+
     const notes = patternMap[stepIndex] || [];
     notes.forEach((note) => {
       postNoteOnMessage(note, currentTime);
@@ -154,7 +156,7 @@ function postNoteOnMessage(note: number, time: number) {
     note,
     velocity: 100,
     time,
-  } as Output);
+  } satisfies Output);
 }
 
 function postNoteOffMessage(note: number, time: number) {
@@ -163,7 +165,7 @@ function postNoteOffMessage(note: number, time: number) {
     channel: 10,
     note,
     time,
-  } as Output);
+  } satisfies Output);
 }
 
 function postTickMessage(currentTime: number) {
@@ -172,5 +174,13 @@ function postTickMessage(currentTime: number) {
     time: currentTime,
     playhead: (pulseCount / pulsesPerStep()) % steps,
     pulse: pulseCount,
-  } as Output);
+  } satisfies Output);
+}
+
+function postStepMessage(stepIndex: number, currentTime: number) {
+  postMessage({
+    type: "step",
+    stepIndex,
+    currentTime,
+  } satisfies Output);
 }

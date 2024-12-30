@@ -12,6 +12,7 @@ export type Output =
       playhead: number;
       pulse: number;
     }
+  | { type: "step"; stepIndex: number; currentTime: number }
   | { type: "initial" }
   | { type: "started" }
   | { type: "stopped" }

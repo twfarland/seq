@@ -34,9 +34,9 @@ export function MetronomeControl({ midiOutput }: MetronomeControlProps) {
   // React to worker output
   createEffect(() => {
     const message = output();
-    if (message?.type === "tick") {
+    if (message?.type === "step") {
       // update playhead position
-      setPlayhead(message.playhead);
+      setPlayhead(message.stepIndex);
     }
   });
 
@@ -77,12 +77,24 @@ export function MetronomeControl({ midiOutput }: MetronomeControlProps) {
                     return newPattern;
                   })
                 }
+                style={
+                  String(playhead()) == index ? "border: 1px solid red" : ""
+                }
               />
             )}
           </For>
         </div>
-
-        <div>{playhead() % steps()}</div>
+        <div>
+          <For each={Object.entries(pattern())}>
+            {([index]) => (
+              <input
+                type="checkbox"
+                disabled
+                checked={String(playhead()) == index}
+              />
+            )}
+          </For>
+        </div>
       </div>
     </div>
   );
