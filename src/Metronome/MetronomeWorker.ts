@@ -2,6 +2,9 @@
 
 import type { Input, Output } from "./MetronomeMessage";
 
+const steps = 16; // steps per measure (16th notes in 4/4)
+const beats = 4; // 4/4 time signature
+
 // -----------------------------------------------------------------------------
 // Global State
 // -----------------------------------------------------------------------------
@@ -10,23 +13,13 @@ let ppq = 24;
 let running = false;
 let tickInterval = calculateTickInterval();
 let lastTickTime: number | null = null;
-
-// Example: 16th-note pattern with four on the floor (kick on beats 0,4,8,12)
-let patternMap: Record<number, number[]> = {
-  0: [36],
-  2: [36],
-  4: [37],
-  8: [36],
-  11: [36],
-  12: [37],
-};
-const patternLength = 16; // steps per measure (16th notes in 4/4)
-const patternDivision = 4; // 4/4 time signature
+let patternMap: Record<number, number[]> = {};
+let activeNotes: ActiveNote[] = [];
 let pulseCount = 0; // increments every single PPQ pulse
 
 // Each 16th note = ppq/4 pulses, if ppq=24 => 6 pulses per 16th
 function pulsesPerStep() {
-  return ppq / (patternLength / patternDivision);
+  return ppq / (steps / beats);
 }
 
 function calculateTickInterval() {
@@ -38,7 +31,6 @@ interface ActiveNote {
   note: number;
   offTime: number;
 }
-let activeNotes: ActiveNote[] = [];
 
 // -----------------------------------------------------------------------------
 // Message Handling
@@ -140,7 +132,7 @@ function handleNoteOns(currentTime: number) {
   // If the new pulseCount is exactly on a new step boundary...
   // e.g., step boundary every `pulsesPerStep()` pulses
   if (pulseCount % pulsesPerStep() === 0) {
-    const stepIndex = (pulseCount / pulsesPerStep()) % patternLength;
+    const stepIndex = (pulseCount / pulsesPerStep()) % steps;
     const notes = patternMap[stepIndex] || [];
     notes.forEach((note) => {
       postNoteOnMessage(note, currentTime);
@@ -178,7 +170,7 @@ function postTickMessage(currentTime: number) {
   postMessage({
     type: "tick",
     time: currentTime,
-    playhead: (pulseCount / pulsesPerStep()) % patternLength,
+    playhead: (pulseCount / pulsesPerStep()) % steps,
     pulse: pulseCount,
   } as Output);
 }
