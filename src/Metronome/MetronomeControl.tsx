@@ -1,13 +1,42 @@
-import { c } from "vinxi/dist/types/lib/logger";
 import { createMetronomePort } from "./MetronomePort";
 import { createEffect, createSignal, For } from "solid-js";
+import { MidiSend } from "./MidiSend";
+
+interface Step {
+  velocity: number;
+  lengthInSteps: number;
+}
+
+interface Lane {
+  instrument: string; // e.g. "kick", "C4"
+  midiNote: number; // e.g. 36 for kick, 60 for C4
+  steps: Map<number, Step>; // step index -> velocity, length
+}
+
+interface Clip {
+  name: string; // e.g. "Drums"
+  channel: number;
+  lanes: Lane[];
+  beats: number;
+  stepsPerBeat: number;
+}
+
+interface Pattern {
+  name: string;
+  clips: Clip[];
+}
+
+function calculateLengthInSteps(beats: number, stepDivision: number): number {
+  return beats * stepDivision;
+}
 
 export type MetronomeControlProps = {
   midiOutput: MIDIOutput;
 };
 
 export function MetronomeControl({ midiOutput }: MetronomeControlProps) {
-  const { send, output } = createMetronomePort(midiOutput);
+  const midiSend = new MidiSend(midiOutput);
+  const { input, output } = createMetronomePort(midiSend);
   const [bpm, setBpm] = createSignal(120);
   const [ppq, setPpq] = createSignal(24);
   const [beats, setBeats] = createSignal(4);
@@ -17,21 +46,21 @@ export function MetronomeControl({ midiOutput }: MetronomeControlProps) {
   );
   const [playhead, setPlayhead] = createSignal(0);
 
-  const startSequencer = () => send({ type: "start" });
-  const stopSequencer = () => send({ type: "stop" });
+  const startSequencer = () => input({ type: "start" });
+  const stopSequencer = () => input({ type: "stop" });
 
-  // Update worker when BPM or PPQ changes
   createEffect(() => {
-    send({ type: "set_bpm", bpm: bpm() });
-    send({ type: "set_ppq", ppq: ppq() });
+    input({ type: "set_bpm", bpm: bpm() });
   });
 
-  // Update worker when pattern changes
   createEffect(() => {
-    send({ type: "set_pattern", pattern: pattern() });
+    input({ type: "set_ppq", ppq: ppq() });
   });
 
-  // React to worker output
+  createEffect(() => {
+    input({ type: "set_pattern", pattern: pattern() });
+  });
+
   createEffect(() => {
     const message = output();
     if (message?.type === "step") {
