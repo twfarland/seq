@@ -1,34 +1,7 @@
 import { createMetronomePort } from "./MetronomePort";
 import { createEffect, createSignal, For } from "solid-js";
 import { MidiSend } from "./MidiSend";
-
-interface Step {
-  velocity: number;
-  lengthInSteps: number;
-}
-
-interface Lane {
-  instrument: string; // e.g. "kick", "C4"
-  midiNote: number; // e.g. 36 for kick, 60 for C4
-  steps: Map<number, Step>; // step index -> velocity, length
-}
-
-interface Clip {
-  name: string; // e.g. "Drums"
-  channel: number;
-  lanes: Lane[];
-  beats: number;
-  stepsPerBeat: number;
-}
-
-interface Pattern {
-  name: string;
-  clips: Clip[];
-}
-
-function calculateLengthInSteps(beats: number, stepDivision: number): number {
-  return beats * stepDivision;
-}
+import { Pattern } from "./Pattern";
 
 export type MetronomeControlProps = {
   midiOutput: MIDIOutput;
@@ -41,9 +14,7 @@ export function MetronomeControl({ midiOutput }: MetronomeControlProps) {
   const [ppq, setPpq] = createSignal(24);
   const [beats, setBeats] = createSignal(4);
   const [steps, setSteps] = createSignal(16);
-  const [pattern, setPattern] = createSignal<Record<number, number[]>>(
-    blankPattern(steps())
-  );
+  const [pattern, setPattern] = createSignal<Pattern>(blankPattern());
   const [playhead, setPlayhead] = createSignal(0);
 
   const startSequencer = () => input({ type: "start" });
@@ -91,8 +62,20 @@ export function MetronomeControl({ midiOutput }: MetronomeControlProps) {
       <button onClick={stopSequencer}>Stop</button>
 
       <div>
-        <label>Pattern:</label>
+        <label>Pattern: {pattern().name}</label>
+
         <div>
+          <For each={pattern().clips}>
+            {(clip) => (
+              <div>
+                <h5>{clip.name}</h5>
+                <sub>
+                  {clip.beats}/{clip.stepsPerBeat}, Ch. {clip.channel}
+                </sub>
+              </div>
+            )}
+          </For>
+
           <For each={Object.entries(pattern())}>
             {([index, notes]) => (
               // use checkboxes to toggle notes in pattern
@@ -102,7 +85,6 @@ export function MetronomeControl({ midiOutput }: MetronomeControlProps) {
                 onClick={() =>
                   setPattern((prev) => {
                     const newPattern = { ...prev };
-                    newPattern[Number(index)] = notes.length > 0 ? [] : [36];
                     return newPattern;
                   })
                 }
@@ -129,10 +111,52 @@ export function MetronomeControl({ midiOutput }: MetronomeControlProps) {
   );
 }
 
-const blankPattern = (steps: number) => {
-  const pattern: Record<number, number[]> = {};
-  for (let i = 0; i < steps; i++) {
-    pattern[i] = [];
-  }
-  return pattern;
+const blankPattern = (): Pattern => {
+  const beats = 4;
+  const stepsPerBeat = 4;
+  const steps = beats * stepsPerBeat;
+  return {
+    name: "Blank",
+    clips: [
+      {
+        name: "Drums",
+        channel: 10,
+        beats,
+        stepsPerBeat,
+        lanes: [
+          {
+            instrument: "kick",
+            midiNote: 36,
+            // 4 to the floor
+            steps: new Map([
+              [0, { velocity: 127, lengthInSteps: 1 }],
+              [4, { velocity: 127, lengthInSteps: 1 }],
+              [8, { velocity: 127, lengthInSteps: 1 }],
+              [12, { velocity: 127, lengthInSteps: 1 }],
+            ]),
+          },
+          {
+            instrument: "snare",
+            midiNote: 37,
+            // on the 2 and 4
+            steps: new Map([
+              [4, { velocity: 127, lengthInSteps: 1 }],
+              [12, { velocity: 127, lengthInSteps: 1 }],
+            ]),
+          },
+          {
+            instrument: "closed hihat",
+            midiNote: 42,
+            // on the 16ths
+            steps: new Map(
+              Array.from({ length: steps }, (_, i) => [
+                i,
+                { velocity: 127, lengthInSteps: 1 },
+              ])
+            ),
+          },
+        ],
+      },
+    ],
+  };
 };

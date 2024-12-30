@@ -1,9 +1,7 @@
 // MetronomeWorker.ts
 
 import type { Input, Output } from "./MetronomeMessage";
-
-const steps = 16; // steps per measure (16th notes in 4/4)
-const beats = 4; // 4/4 time signature
+import { Clip, Pattern } from "./Pattern";
 
 // -----------------------------------------------------------------------------
 // Global State
@@ -13,28 +11,37 @@ let ppq = 24;
 let running = false;
 let tickInterval = calculateTickInterval();
 let lastTickTime: number | null = null;
-let patternMap: Record<number, number[]> = {};
+let pattern: Pattern = {
+  name: "default",
+  clips: [],
+};
 let activeNotes: ActiveNote[] = [];
 let pulseCount = 0; // increments every single PPQ pulse
-
-// Each 16th note = ppq/4 pulses, if ppq=24 => 6 pulses per 16th
-function pulsesPerStep() {
-  return ppq / (steps / beats);
-}
 
 function calculateTickInterval() {
   return (60 / bpm / ppq) * 1000;
 }
 
+// Add a helper to calculate pulses per step for each clip:
+function pulsesPerClipStep(clip: Clip): number {
+  return ppq / clip.subdivisionPerBeat;
+}
+
 // We'll store which notes are currently active to schedule note-offs
+// @TODO improve this data structure
 interface ActiveNote {
   note: number;
   offTime: number;
+  channel: number;
 }
 
 // -----------------------------------------------------------------------------
 // Message Handling
 // -----------------------------------------------------------------------------
+
+const postOutputMessage = <O extends Output>(message: O) =>
+  postMessage(message);
+
 onmessage = (event: MessageEvent<Input>) => {
   const message = event.data;
 
@@ -50,7 +57,7 @@ onmessage = (event: MessageEvent<Input>) => {
       break;
 
     case "set_pattern":
-      patternMap = message.pattern;
+      pattern = message.pattern;
       break;
 
     case "start":
@@ -76,6 +83,7 @@ onmessage = (event: MessageEvent<Input>) => {
 // -----------------------------------------------------------------------------
 // Main Loop
 // -----------------------------------------------------------------------------
+
 function scheduleTicks() {
   if (!running) return;
 
@@ -94,8 +102,12 @@ function scheduleTicks() {
     // Then check if we hit a step boundary => note on
     handleNoteOns(performance.now());
 
-    // Post a tick message (for UI / debugging). Only on step boundaries.
-    postTickMessage(performance.now());
+    // Post a tick message for midi sync
+    postOutputMessage({
+      type: "tick",
+      time: performance.now(),
+      pulse: pulseCount,
+    });
 
     elapsed = performance.now() - lastTickTime;
 
@@ -114,13 +126,19 @@ function scheduleTicks() {
 // -----------------------------------------------------------------------------
 // Helper Functions
 // -----------------------------------------------------------------------------
+
 function handleNoteOffs(currentTime: number) {
   if (activeNotes.length === 0) return;
   const stillActive: ActiveNote[] = [];
 
   for (const n of activeNotes) {
     if (n.offTime <= currentTime) {
-      postNoteOffMessage(n.note, currentTime);
+      postOutputMessage({
+        type: "note_off",
+        channel: n.channel,
+        note: n.note,
+        time: currentTime,
+      });
     } else {
       stillActive.push(n);
     }
@@ -129,58 +147,47 @@ function handleNoteOffs(currentTime: number) {
 }
 
 function handleNoteOns(currentTime: number) {
-  // If the new pulseCount is exactly on a new step boundary...
-  // e.g., step boundary every `pulsesPerStep()` pulses
-  if (pulseCount % pulsesPerStep() === 0) {
-    const stepIndex = (pulseCount / pulsesPerStep()) % steps;
-    postStepMessage(stepIndex, currentTime);
+  for (let clipIndex = 0; clipIndex < pattern.clips.length; clipIndex++) {
+    const clip = pattern.clips[clipIndex];
 
-    const notes = patternMap[stepIndex] || [];
-    notes.forEach((note) => {
-      postNoteOnMessage(note, currentTime);
+    // figure out if this clip hits a step boundary
+    const clipStepPulses = pulsesPerClipStep(clip);
+    if (pulseCount % clipStepPulses === 0) {
+      const totalSteps = clip.beatsPerMeasure * clip.subdivisionPerBeat;
+      const stepIndex = (pulseCount / clipStepPulses) % totalSteps;
 
-      // Schedule note_off one step later
-      const stepMs = pulsesPerStep() * tickInterval;
-      activeNotes.push({
-        note,
-        offTime: currentTime + stepMs,
+      // post a step message that includes the clip index
+      postOutputMessage({
+        type: "step",
+        clipIndex,
+        stepIndex,
+        time: currentTime,
       });
-    });
+
+      // now fire notes for this clip
+      for (const lane of clip.lanes) {
+        const step = lane.steps.get(stepIndex);
+        if (!step) {
+          continue;
+        }
+
+        // note on
+        postOutputMessage({
+          type: "note_on",
+          time: currentTime,
+          midiNote: lane.midiNote,
+          channel: clip.channel,
+          velocity: step.velocity,
+        });
+
+        // schedule note off using *this clip's* step pulses
+        const stepMs = clipStepPulses * tickInterval * step.lengthInSteps;
+        activeNotes.push({
+          note: lane.midiNote,
+          offTime: currentTime + stepMs,
+          channel: clip.channel,
+        });
+      }
+    }
   }
-}
-
-function postNoteOnMessage(note: number, time: number) {
-  postMessage({
-    type: "note_on",
-    channel: 10,
-    note,
-    velocity: 100,
-    time,
-  } satisfies Output);
-}
-
-function postNoteOffMessage(note: number, time: number) {
-  postMessage({
-    type: "note_off",
-    channel: 10,
-    note,
-    time,
-  } satisfies Output);
-}
-
-function postTickMessage(currentTime: number) {
-  postMessage({
-    type: "tick",
-    time: currentTime,
-    playhead: (pulseCount / pulsesPerStep()) % steps,
-    pulse: pulseCount,
-  } satisfies Output);
-}
-
-function postStepMessage(stepIndex: number, currentTime: number) {
-  postMessage({
-    type: "step",
-    stepIndex,
-    currentTime,
-  } satisfies Output);
 }
