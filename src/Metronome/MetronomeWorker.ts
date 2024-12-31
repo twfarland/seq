@@ -15,6 +15,13 @@ let pattern: Pattern = {
   name: "default",
   clips: [],
 };
+// We'll store which notes are currently active to schedule note-offs
+// @TODO improve this data structure
+interface ActiveNote {
+  midiNote: number;
+  offTime: number;
+  channel: number;
+}
 let activeNotes: ActiveNote[] = [];
 let pulseCount = 0; // increments every single PPQ pulse
 
@@ -25,14 +32,6 @@ function calculateTickInterval() {
 // Helper to calculate pulses per step for each clip:
 function pulsesPerClipStep(clip: Clip): number {
   return ppq / clip.subdivisionPerBeat;
-}
-
-// We'll store which notes are currently active to schedule note-offs
-// @TODO improve this data structure
-interface ActiveNote {
-  note: number;
-  offTime: number;
-  channel: number;
 }
 
 // -----------------------------------------------------------------------------
@@ -135,7 +134,7 @@ function handleNoteOffs(currentTime: number) {
       postOutputMessage({
         type: "note_off",
         channel: n.channel,
-        note: n.note,
+        midiNote: n.midiNote,
         time: currentTime,
       });
     } else {
@@ -180,7 +179,7 @@ function handleNoteOns(currentTime: number) {
         // schedule note off using *this clip's* step pulses
         const stepMs = clipStepPulses * tickInterval * step.lengthInSteps;
         activeNotes.push({
-          note: lane.midiNote,
+          midiNote: lane.midiNote,
           offTime: currentTime + stepMs,
           channel: clip.channel,
         });

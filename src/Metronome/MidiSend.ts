@@ -15,27 +15,27 @@ export class MidiSend {
 
   noteOn({
     channel,
-    note,
+    midiNote,
     velocity,
     time,
   }: {
     channel: number;
-    note: number;
+    midiNote: number;
     velocity: number;
     time: number;
   }) {
-    this.midiOutput.send([0x90 + (channel - 1), note, velocity], time);
+    this.midiOutput.send([0x90 + (channel - 1), midiNote, velocity], time);
   }
 
   noteOff({
     channel,
-    note,
+    midiNote,
     time,
   }: {
     channel: number;
-    note: number;
+    midiNote: number;
     time: number;
   }) {
-    this.midiOutput.send([0x80 + (channel - 1), note, 0x00], time);
+    this.midiOutput.send([0x80 + (channel - 1), midiNote, 0x00], time);
   }
 }

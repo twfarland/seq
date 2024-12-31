@@ -1,19 +1,14 @@
 import { createMetronomePort } from "./MetronomePort";
 import { createEffect, createSignal, For } from "solid-js";
 import { MidiSend } from "./MidiSend";
-import { Pattern } from "./Pattern";
-import { Lens } from "monocle-ts";
+import { produce } from "immer";
 
-export type MetronomeControlProps = {
-  midiOutput: MIDIOutput;
-};
-
-export function MetronomeControl({ midiOutput }: MetronomeControlProps) {
-  const midiSend = new MidiSend(midiOutput);
+export function MetronomeControl(props: { midiOutput: MIDIOutput }) {
+  const midiSend = new MidiSend(props.midiOutput);
   const { input, output } = createMetronomePort(midiSend);
   const [bpm, setBpm] = createSignal(120);
   const [ppq, setPpq] = createSignal(24);
-  const [pattern, setPattern] = createSignal<Pattern>(blankPattern()); // TODO more granular reactive/store
+  const [pattern, setPattern] = createSignal(blankPattern()); // TODO more granular reactive/store
 
   const startSequencer = () => input({ type: "start" });
   const stopSequencer = () => input({ type: "stop" });
@@ -23,24 +18,16 @@ export function MetronomeControl({ midiOutput }: MetronomeControlProps) {
     laneIndex: number,
     stepIndex: number
   ) => {
-    // use a lens to update the pattern immutably
-    const lens = Lens.fromPath<Pattern>()([
-      "clips",
-      clipIndex,
-      "lanes",
-      laneIndex,
-      "steps",
-    ]);
+    setPattern((prevPattern) =>
+      produce(prevPattern, (draft) => {
+        const steps = draft.clips[clipIndex].lanes[laneIndex].steps;
 
-    setPattern((_pattern) =>
-      lens.modify((steps) => {
         if (steps[stepIndex]) {
-          const { [stepIndex]: _, ...rest } = steps;
-          return rest;
+          delete steps[stepIndex];
         } else {
-          return { ...steps, [stepIndex]: { velocity: 127, lengthInSteps: 1 } };
+          steps[stepIndex] = { velocity: 127, lengthInSteps: 1 };
         }
-      })(_pattern)
+      })
     );
   };
 
@@ -102,7 +89,9 @@ export function MetronomeControl({ midiOutput }: MetronomeControlProps) {
                   <For each={Array.from(lanes.entries())}>
                     {([laneIndex, { instrument, midiNote, steps }]) => (
                       <div>
-                        <b>{instrument}</b>
+                        <b style="width: 100px; display: inline-block;">
+                          {instrument}
+                        </b>
                         <input type="number" value={midiNote} step={1} />
                         <For
                           each={new Array(clipSteps).fill(0).map((_, i) => i)}
@@ -113,10 +102,10 @@ export function MetronomeControl({ midiOutput }: MetronomeControlProps) {
                             <input
                               type="checkbox"
                               checked={steps[stepIndex] !== undefined}
-                              onClick={
-                                () =>
-                                  toggleStep(clipIndex, laneIndex, stepIndex) // TODO: implement as message to worker?
-                              }
+                              onClick={(e) => {
+                                e.preventDefault();
+                                toggleStep(clipIndex, laneIndex, stepIndex); // TODO: implement as message to worker?
+                              }}
                             />
                           )}
                         </For>
@@ -139,29 +128,25 @@ export function MetronomeControl({ midiOutput }: MetronomeControlProps) {
   );
 }
 
-function MidiNoteTrigger({
-  midiNote,
-  midiSend,
-  channel,
-}: {
-  channel: number;
+function MidiNoteTrigger(props: {
   midiNote: number;
   midiSend: MidiSend;
+  channel: number;
 }) {
   return (
     <button
-      onkeydown={() => {
-        midiSend.noteOn({
-          channel,
-          note: midiNote,
+      onPointerDown={() => {
+        props.midiSend.noteOn({
+          channel: props.channel,
+          midiNote: props.midiNote,
           velocity: 127,
-          time: performance.now(),
+          time: performance.now() + 100,
         });
       }}
-      onkeyup={() => {
-        midiSend.noteOff({
-          channel,
-          note: midiNote,
+      onPointerUp={() => {
+        props.midiSend.noteOff({
+          channel: props.channel,
+          midiNote: props.midiNote,
           time: performance.now(),
         });
       }}
@@ -171,7 +156,7 @@ function MidiNoteTrigger({
   );
 }
 
-const blankPattern = (): Pattern => {
+const blankPattern = () => {
   const beatsPerMeasure = 4;
   const subdivisionPerBeat = 4;
   const steps = beatsPerMeasure * subdivisionPerBeat;

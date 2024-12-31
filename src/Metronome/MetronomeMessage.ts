@@ -33,6 +33,6 @@ export type Output =
   | {
       type: "note_off";
       channel: number;
-      note: number;
+      midiNote: number;
       time: number;
     };
