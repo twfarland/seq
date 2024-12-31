@@ -6,7 +6,7 @@ export interface Step {
 export interface Lane {
   instrument: string; // e.g. "kick", "C4"
   midiNote: number; // e.g. 36 for kick, 60 for C4
-  steps: Map<number, Step>; // step index -> velocity, length
+  steps: Record<number, Step>; // step index -> velocity, length
 }
 
 export interface Clip {
@@ -23,8 +23,8 @@ export interface Pattern {
 }
 
 export function calculateLengthInSteps(
-  beats: number,
-  stepsPerBeat: number
+  beatsPerMeasure: number,
+  subdivisionPerBeat: number
 ): number {
-  return beats * stepsPerBeat;
+  return beatsPerMeasure * subdivisionPerBeat;
 }

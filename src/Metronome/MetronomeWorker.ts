@@ -22,7 +22,7 @@ function calculateTickInterval() {
   return (60 / bpm / ppq) * 1000;
 }
 
-// Add a helper to calculate pulses per step for each clip:
+// Helper to calculate pulses per step for each clip:
 function pulsesPerClipStep(clip: Clip): number {
   return ppq / clip.subdivisionPerBeat;
 }
@@ -67,7 +67,7 @@ onmessage = (event: MessageEvent<Input>) => {
         lastTickTime = performance.now();
         activeNotes = [];
         scheduleTicks();
-        postMessage({ type: "started" } satisfies Output);
+        postOutputMessage({ type: "started" });
       }
       break;
 
@@ -75,7 +75,7 @@ onmessage = (event: MessageEvent<Input>) => {
       running = false;
       lastTickTime = null;
       activeNotes = [];
-      postMessage({ type: "stopped" } satisfies Output);
+      postOutputMessage({ type: "stopped" });
       break;
   }
 };
@@ -109,9 +109,8 @@ function scheduleTicks() {
       pulse: pulseCount,
     });
 
-    elapsed = performance.now() - lastTickTime;
-
     // Advance time and pulses
+    elapsed = performance.now() - lastTickTime;
     lastTickTime += tickInterval;
     pulseCount++;
   }
@@ -147,9 +146,7 @@ function handleNoteOffs(currentTime: number) {
 }
 
 function handleNoteOns(currentTime: number) {
-  for (let clipIndex = 0; clipIndex < pattern.clips.length; clipIndex++) {
-    const clip = pattern.clips[clipIndex];
-
+  for (const [clipIndex, clip] of pattern.clips.entries()) {
     // figure out if this clip hits a step boundary
     const clipStepPulses = pulsesPerClipStep(clip);
     if (pulseCount % clipStepPulses === 0) {
@@ -166,7 +163,7 @@ function handleNoteOns(currentTime: number) {
 
       // now fire notes for this clip
       for (const lane of clip.lanes) {
-        const step = lane.steps.get(stepIndex);
+        const step = lane.steps[stepIndex];
         if (!step) {
           continue;
         }
