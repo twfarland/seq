@@ -1,5 +1,5 @@
 import { MetronomeControl } from "./Metronome/MetronomeControl";
-import { MidiManager } from "./MidiManager";
+import { MidiManager } from "./Metronome/MidiManager";
 import "./app.css";
 
 export default function App() {

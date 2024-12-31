@@ -82,17 +82,82 @@ export function MetronomeControl(props: { midiOutput: MIDIOutput }) {
               return (
                 <div>
                   <h5>{name}</h5>
+                  <label>Channel</label>
+                  <input
+                    type="number"
+                    value={channel}
+                    step={1}
+                    onChange={(e) => {
+                      setPattern((prevPattern) =>
+                        produce(prevPattern, (draft) => {
+                          draft.clips[clipIndex].channel =
+                            +e.currentTarget.value;
+                        })
+                      );
+                    }}
+                  />
+                  <label>Time Signature:</label>
                   <sub>
-                    {beatsPerMeasure}/{subdivisionPerBeat}, Ch. {channel}
+                    <input
+                      type="number"
+                      value={beatsPerMeasure}
+                      step={1}
+                      onChange={(e) => {
+                        setPattern((prevPattern) =>
+                          produce(prevPattern, (draft) => {
+                            draft.clips[clipIndex].beatsPerMeasure =
+                              +e.currentTarget.value;
+                          })
+                        );
+                      }}
+                    />
+                    /
+                    <input
+                      type="number"
+                      value={subdivisionPerBeat}
+                      step={1}
+                      onChange={(e) => {
+                        setPattern((prevPattern) =>
+                          produce(prevPattern, (draft) => {
+                            draft.clips[clipIndex].subdivisionPerBeat =
+                              +e.currentTarget.value;
+                          })
+                        );
+                      }}
+                    />
                   </sub>
 
                   <For each={Array.from(lanes.entries())}>
                     {([laneIndex, { instrument, midiNote, steps }]) => (
                       <div>
-                        <b style="width: 100px; display: inline-block;">
-                          {instrument}
-                        </b>
-                        <input type="number" value={midiNote} step={1} />
+                        <input
+                          value={instrument}
+                          onChange={(e) => {
+                            setPattern((prevPattern) =>
+                              produce(prevPattern, (draft) => {
+                                draft.clips[clipIndex].lanes[
+                                  laneIndex
+                                ].instrument = e.currentTarget.value;
+                              })
+                            );
+                          }}
+                        />
+
+                        <input
+                          type="number"
+                          value={midiNote}
+                          step={1}
+                          onChange={(e) => {
+                            setPattern((prevPattern) =>
+                              produce(prevPattern, (draft) => {
+                                draft.clips[clipIndex].lanes[
+                                  laneIndex
+                                ].midiNote = +e.currentTarget.value;
+                              })
+                            );
+                          }}
+                        />
+
                         <For
                           each={new Array(clipSteps).fill(0).map((_, i) => i)}
                         >
