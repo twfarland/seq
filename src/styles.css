@@ -1,0 +1,266 @@
+/* A deliberately small stylesheet: enough structure to read the grid at a
+   glance, no framework. Colours are driven by tokens so the whole UI follows
+   the OS light/dark preference. */
+
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --border: #d8dce3;
+  --text: #14181f;
+  --muted: #5d6673;
+  --accent: #3b6cf6;
+  --accent-text: #ffffff;
+  --step-off: #e6e9ef;
+  --step-on: #3b6cf6;
+  --step-playing: #f6a13b;
+  --warn-bg: #fff6e5;
+  --warn-text: #7a4c00;
+  --error-bg: #fdeaea;
+  --error-text: #8c1d1d;
+
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #10131a;
+    --surface: #181c25;
+    --border: #2b313d;
+    --text: #e8ecf3;
+    --muted: #97a1b2;
+    --accent: #6f96ff;
+    --accent-text: #0b0e14;
+    --step-off: #232935;
+    --step-on: #6f96ff;
+    --step-playing: #ffb454;
+    --warn-bg: #3a2e12;
+    --warn-text: #ffd591;
+    --error-bg: #3a1a1a;
+    --error-text: #ffb3b3;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.app {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 2rem 1rem 4rem;
+}
+
+.app h1 {
+  margin: 0;
+  font-size: 1.75rem;
+  letter-spacing: -0.02em;
+}
+
+.app__tagline {
+  margin: 0.25rem 0 1.5rem;
+  color: var(--muted);
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.panel__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.panel__header h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.transport {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+}
+
+/* --- fields --- */
+
+.field {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+}
+
+.field__label {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.7rem;
+}
+
+.field__input {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.4rem 0.5rem;
+  font: inherit;
+  font-size: 0.9rem;
+  min-width: 6rem;
+}
+
+.field__suffix {
+  color: var(--warn-text);
+  font-size: 0.7rem;
+}
+
+/* --- buttons --- */
+
+.button {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.45rem 0.9rem;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.button--primary {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-color: var(--accent);
+}
+
+.button--ghost {
+  border-color: transparent;
+  color: var(--muted);
+}
+
+.button--audition:active {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+/* --- clips and lanes --- */
+
+.clip {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.clip__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.clip__meta {
+  color: var(--muted);
+  font-size: 0.75rem;
+  padding-bottom: 0.5rem;
+}
+
+.lane {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.lane__controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+/* The grid scrolls on its own so a 32-step clip never widens the page. */
+.lane__steps {
+  display: flex;
+  gap: 3px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.step {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--step-off);
+  cursor: pointer;
+  padding: 0;
+  font-size: 0.6rem;
+  color: var(--accent-text);
+  line-height: 1;
+}
+
+/* Beat starts get a heavier edge so 16ths stay countable at a glance. */
+.step--beat {
+  border-left: 2px solid var(--muted);
+}
+
+.step--on {
+  background: var(--step-on);
+}
+
+.step--playing {
+  outline: 2px solid var(--step-playing);
+  outline-offset: 1px;
+}
+
+.step__velocity {
+  opacity: 0.85;
+}
+
+/* --- notices --- */
+
+.notice {
+  margin: 0.5rem 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  background: var(--step-off);
+  color: var(--muted);
+}
+
+.notice--warn {
+  background: var(--warn-bg);
+  color: var(--warn-text);
+}
+
+.notice--error {
+  background: var(--error-bg);
+  color: var(--error-text);
+}
