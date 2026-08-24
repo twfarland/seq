@@ -22,6 +22,7 @@ const midi = spawn(midiProc(webMidi), undefined, {
     status: "idle",
     message: "",
     outputs: [],
+    inputs: [],
     selectedId: "",
     send: undefined,
   } satisfies MidiState,

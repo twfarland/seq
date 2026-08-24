@@ -6,6 +6,7 @@ import type {
   Clock,
   MidiDirectory,
   MidiOut,
+  MidiPermission,
   MidiPorts,
   OutputInfo,
   SequencerChannel,
@@ -63,20 +64,29 @@ export function manualFrames() {
 
 // ---------- MIDI ----------
 
-export type FakeMidiOut = MidiOut & {
-  [K in keyof MidiOut]: ReturnType<typeof vi.fn>;
-};
+/**
+ * A recording {@link MidiOut}.
+ *
+ * Deliberately a class, not an object literal: nonchalant tracks a class
+ * instance as an atomic leaf and walks into a plain object, and this one is
+ * held in process state. An object-literal fake would take a different path
+ * through reconcile than the real `MidiSend` does, which is the sort of
+ * difference that leaves a test green and an app broken.
+ */
+class RecordingMidiOut {
+  clock = vi.fn();
+  start = vi.fn();
+  stop = vi.fn();
+  noteOn = vi.fn();
+  noteOff = vi.fn();
+  allNotesOff = vi.fn();
+  panic = vi.fn();
+}
+
+export type FakeMidiOut = RecordingMidiOut & MidiOut;
 
 export function fakeMidiOut(): FakeMidiOut {
-  return {
-    clock: vi.fn(),
-    start: vi.fn(),
-    stop: vi.fn(),
-    noteOn: vi.fn(),
-    noteOff: vi.fn(),
-    allNotesOff: vi.fn(),
-    panic: vi.fn(),
-  } as FakeMidiOut;
+  return new RecordingMidiOut() as FakeMidiOut;
 }
 
 const DEFAULT_PORT: OutputInfo = {
@@ -90,13 +100,22 @@ const DEFAULT_PORT: OutputInfo = {
  * writer for each. `out(id)` returns the same object the app was given, so an
  * assertion about what was played is an assertion about that object.
  */
-export function fakeMidiPorts(initial: OutputInfo[] = [DEFAULT_PORT]) {
+export function fakeMidiPorts(
+  initial: OutputInfo[] = [DEFAULT_PORT],
+  /** What the environment says it will do. Granted by default: most tests are
+   * not about the prompt, and would otherwise all have to press the button. */
+  permission: MidiPermission = "granted",
+  /** Input ports, which seq never plays through but does report on. */
+  initialInputs: OutputInfo[] = []
+) {
   let attached = initial;
+  let attachedInputs = initialInputs;
   const opened = new Map<string, FakeMidiOut>();
   const listeners: (() => void)[] = [];
 
   const directory: MidiDirectory = {
     list: () => attached.map((port) => ({ ...port })),
+    inputs: () => attachedInputs.map((port) => ({ ...port })),
     open: (id) => {
       if (!attached.some((port) => port.id === id)) return undefined;
       const existing = opened.get(id);
@@ -115,7 +134,11 @@ export function fakeMidiPorts(initial: OutputInfo[] = [DEFAULT_PORT]) {
   };
 
   return {
-    ports: { open: () => Promise.resolve(directory) } satisfies MidiPorts,
+    ports: {
+      available: () => true,
+      permission: () => Promise.resolve(permission),
+      open: () => Promise.resolve(directory),
+    } satisfies MidiPorts,
     /** The writer the app was handed for `id`, if it ever asked for one. */
     out: (id = DEFAULT_PORT.id) => opened.get(id),
     firstId: initial[0]?.id ?? DEFAULT_PORT.id,
@@ -124,6 +147,11 @@ export function fakeMidiPorts(initial: OutputInfo[] = [DEFAULT_PORT]) {
       attached = next;
       for (const fn of [...listeners]) fn();
     },
+    /** Change what is attached without announcing it - the case "Look again" exists for. */
+    attachQuietly(next: OutputInfo[], nextInputs: OutputInfo[] = attachedInputs) {
+      attached = next;
+      attachedInputs = nextInputs;
+    },
     get listenerCount() {
       return listeners.length;
     },
@@ -131,12 +159,25 @@ export function fakeMidiPorts(initial: OutputInfo[] = [DEFAULT_PORT]) {
 }
 
 /** No Web MIDI in this environment at all - not the same as refused. */
-export const noMidiPorts: MidiPorts = { open: () => undefined };
+export const noMidiPorts: MidiPorts = {
+  available: () => false,
+  permission: () => Promise.resolve("denied"),
+  open: () => Promise.reject(new Error("no MIDI here")),
+};
 
-/** Refused permission. */
+/** A prompt that will be refused when it is finally asked for. */
 export const refusedMidiPorts = (why: string): MidiPorts => ({
+  available: () => true,
+  permission: () => Promise.resolve("prompt"),
   open: () => Promise.reject(new Error(why)),
 });
+
+/** Blocked before we ever got here, so there is no prompt left to show. */
+export const blockedMidiPorts: MidiPorts = {
+  available: () => true,
+  permission: () => Promise.resolve("denied"),
+  open: () => Promise.reject(new Error("blocked")),
+};
 
 /** A raw `MIDIOutput` stand-in, for the adapter's own tests. */
 export function fakeMidiOutput(overrides: Partial<MIDIOutput> = {}) {

@@ -25,6 +25,7 @@ const initialMidi: MidiState = {
   status: "idle",
   message: "",
   outputs: [],
+  inputs: [],
   selectedId: "",
   send: undefined,
 };

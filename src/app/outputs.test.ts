@@ -1,6 +1,7 @@
 import { spawn } from "@nonchalant/core";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  blockedMidiPorts,
   fakeMidiPorts,
   noMidiPorts,
   refusedMidiPorts,
@@ -20,6 +21,7 @@ const initial: MidiState = {
   status: "idle",
   message: "",
   outputs: [],
+  inputs: [],
   selectedId: "",
   send: undefined,
 };
@@ -43,10 +45,59 @@ describe("permission", () => {
     expect(midi().status).toBe("unsupported");
   });
 
-  it("surfaces the rejection reason instead of failing silently", async () => {
+  it("waits for a gesture when the browser would prompt", async () => {
     const midi = harness(refusedMidiPorts("User denied"));
     await settle();
+    // Nothing has been asked for yet: a prompt no interaction asked for can be
+    // suppressed, and then the app hangs with nothing to show for it.
+    expect(midi().status).toBe("prompt");
+  });
+
+  it("surfaces the rejection reason once it has been asked for", async () => {
+    const midi = harness(refusedMidiPorts("User denied"));
+    await settle();
+
+    midi.cast({ type: "request" });
+    await settle();
+
     expect(midi()).toMatchObject({ status: "denied", message: "User denied" });
+  });
+
+  it("can be asked again after a refusal", async () => {
+    const devices = fakeMidiPorts([{ id: "a", name: "A", manufacturer: "" }]);
+    let refuse = true;
+    const midi = harness({
+      available: () => true,
+      permission: () => Promise.resolve("prompt"),
+      open: () =>
+        refuse
+          ? Promise.reject(new Error("Dismissed"))
+          : devices.ports.open(),
+    });
+    await settle();
+
+    midi.cast({ type: "request" });
+    await settle();
+    expect(midi().status).toBe("denied");
+
+    refuse = false;
+    midi.cast({ type: "request" });
+    await settle();
+    expect(midi().status).toBe("ready");
+  });
+
+  it("explains a standing block rather than offering a prompt that will not appear", async () => {
+    const midi = harness(blockedMidiPorts);
+    await settle();
+    expect(midi().status).toBe("denied");
+    expect(midi().message).toContain("site settings");
+  });
+
+  it("asks straight away when permission is already granted", async () => {
+    // Nothing will pop up, so there is nothing for a gesture to protect.
+    const midi = harness(fakeMidiPorts().ports);
+    await settle();
+    expect(midi().status).toBe("ready");
   });
 });
 
@@ -61,6 +112,20 @@ describe("the port list", () => {
 
     expect(midi().status).toBe("ready");
     expect(midi().outputs.map((output) => output.id)).toEqual(["a", "b"]);
+  });
+
+  it("looks again on request, for a device that arrived quietly", async () => {
+    const devices = fakeMidiPorts([]);
+    const midi = harness(devices.ports);
+    await settle();
+    expect(midi().outputs).toEqual([]);
+
+    devices.attachQuietly([{ id: "a", name: "A", manufacturer: "" }]);
+    expect(midi().outputs).toEqual([]); // no announcement, no change
+
+    midi.cast({ type: "rescan" });
+    await settle();
+    expect(midi().outputs.map((output) => output.id)).toEqual(["a"]);
   });
 
   it("picks up a device plugged in after load", async () => {

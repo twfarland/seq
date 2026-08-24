@@ -72,6 +72,38 @@ rules by checking every import under `src/`. `@nonchalant/core` is available to
 the application layers above the domain. Rendering and transport packages
 (`@nonchalant/dom` and `@nonchalant/wire`) are limited to `ui/` and `adapters/`.
 
+### Asking for MIDI
+
+Browsers prompt for MIDI access whether or not `sysex` is requested — that is
+what the `[Deprecation]` console notice is announcing, and it cannot be silenced
+without asking for more access than the app needs. They are also entitled to
+suppress a prompt that no interaction asked for, in which case the request hangs
+or is refused on the user's behalf.
+
+So [`app/outputs.ts`](src/app/outputs.ts) asks what *would* happen before asking
+for anything, and permission is a state rather than a step:
+
+| status | what the user sees |
+| --- | --- |
+| `idle` | "Looking for MIDI support…" |
+| `unsupported` | which browsers have Web MIDI |
+| `prompt` | an **Enable MIDI** button — the gesture the browser wants |
+| `asking` | "Waiting for permission", and where to look if no prompt appeared |
+| `denied` | the reason, and a **Try again** button |
+| `ready` | the port list, or **Look again** if nothing is attached |
+
+When access works but no output is reported, the panel names any MIDI *inputs*
+it can see. An interface with MIDI usually exposes an In and an Out together, so
+that distinguishes "the browser cannot see this device" from "something else
+already has its output open" — on Windows a MIDI output can only be open in one
+application at a time.
+
+Already-granted permission skips the button: no prompt will appear, so there is
+nothing for a gesture to protect. Every other stage renders something, because
+"nothing is happening yet" is a thing the user needs told — an earlier version
+drew an empty panel while it waited, which is indistinguishable from a broken
+app.
+
 ### Where the state lives
 
 The worker owns the pattern; the UI thread keeps a live copy. A step edit sends
@@ -233,7 +265,7 @@ Some details of the model:
 pnpm test
 ```
 
-The suite has 151 tests. Domain code is pure, and processes receive their clock,
+The suite has 160 tests. Domain code is pure, and processes receive their clock,
 timer, and output port as arguments. Tests can therefore compare exact event
 streams without relying on real time or audible output.
 
@@ -244,7 +276,7 @@ streams without relying on real time or audible output.
 | `domain/edits.test.ts` | Pattern edits, structural sharing, and no-op edits |
 | `app/sequencer.test.ts` | The process: timer lifecycle, transport, and editing while playing — no worker, no real timer |
 | `app/playhead.test.ts` | Frame-accurate scheduling of the display |
-| `app/outputs.test.ts` | Permission, hotplug, and the lifetime of the writer |
+| `app/outputs.test.ts` | The permission ladder, hotplug, rescanning, and the lifetime of the writer |
 | `app/session.test.ts` | Clock-domain translation, the wire round trip, teardown |
 | `adapters/midi.test.ts` | Exact status bytes, channel packing, data-byte clamping, the port directory |
 | `adapters/worker/entry.test.ts` | The worker over a real `MessagePort`: handshake, edits, and both channels sharing it |
@@ -310,7 +342,11 @@ rendering `"false"`. It now stringifies `aria-*` values.
   wake instead of replaying thousands of old pulses.
 - Added clear errors for unsupported browsers and denied Web MIDI permission,
   plus hotplug support. Ports are keyed by `id`, since names may be empty or
-  duplicated. The app no longer requests unused `sysex` access.
+  duplicated. `sysex` access is not requested: the app only sends channel-voice
+  and real-time messages. Note that this buys least privilege, not a quieter
+  prompt — Chrome asks for permission either way, and says so with a
+  `[Deprecation]` console notice that cannot be silenced without requesting
+  more access than the app needs.
 - Added a playhead display, dark mode, and a full stylesheet.
 
 ### Known gaps

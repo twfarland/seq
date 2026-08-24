@@ -108,7 +108,7 @@ export class MidiSend implements MidiOut {
 }
 
 /** How a `MIDIOutput` describes itself to whoever is choosing between them. */
-const describe = (output: MIDIOutput): OutputInfo => ({
+const describe = (output: MIDIPort): OutputInfo => ({
   id: output.id,
   name: output.name ?? "",
   manufacturer: output.manufacturer ?? "",
@@ -121,6 +121,7 @@ const describe = (output: MIDIOutput): OutputInfo => ({
 export function midiDirectory(access: MIDIAccess): MidiDirectory {
   return {
     list: () => Array.from(access.outputs.values(), describe),
+    inputs: () => Array.from(access.inputs.values(), describe),
     open: (id) => {
       const output = access.outputs.get(id);
       return output ? new MidiSend(output) : undefined;
@@ -133,10 +134,31 @@ export function midiDirectory(access: MIDIAccess): MidiDirectory {
 }
 
 export const webMidi: MidiPorts = {
-  open: () =>
-    // `sysex` is deliberately not requested: it triggers a stricter permission
-    // prompt and this app only ever sends channel-voice and real-time messages.
-    typeof navigator.requestMIDIAccess === "function"
-      ? navigator.requestMIDIAccess().then(midiDirectory)
-      : undefined,
+  available: () => typeof navigator.requestMIDIAccess === "function",
+
+  /**
+   * Chrome answers this without prompting; other browsers throw on an unknown
+   * permission name, and Firefox and Safari have no MIDI at all. Anything we
+   * cannot establish is reported as "prompt", which is the answer that puts a
+   * person in charge of asking.
+   */
+  permission: async () => {
+    try {
+      const status = await navigator.permissions?.query({
+        name: "midi" as PermissionName,
+      });
+      return status?.state ?? "prompt";
+    } catch {
+      return "prompt";
+    }
+  },
+
+  // `sysex` is deliberately not requested - for least privilege, not for a
+  // quieter prompt. Chrome asks for permission either way, which is what the
+  // console notice ("Web MIDI will ask a permission to use even if the sysex
+  // is not specified in the MIDIOptions since around M82") is telling you.
+  // That notice cannot be silenced by anything except asking for *more*
+  // access, so it stays. This app only ever sends channel-voice and real-time
+  // messages; sysex would hand it a device's firmware as well.
+  open: () => navigator.requestMIDIAccess().then(midiDirectory),
 };

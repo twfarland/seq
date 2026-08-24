@@ -11,6 +11,7 @@ const initial: MidiState = {
   status: "idle",
   message: "",
   outputs: [],
+  inputs: [],
   selectedId: "",
   send: undefined,
 };
@@ -47,10 +48,45 @@ describe("unsupported browsers", () => {
 });
 
 describe("permission", () => {
-  it("surfaces the rejection reason instead of failing silently", async () => {
-    const { container } = picker(refusedMidiPorts("User gesture required"));
+  it("offers a button rather than prompting on load", async () => {
+    const { container } = picker(refusedMidiPorts("Dismissed"));
     await settle();
-    expect(container.textContent).toContain("User gesture required");
+
+    const enable = container.querySelector("button") as HTMLButtonElement;
+    expect(enable.textContent).toBe("Enable MIDI");
+    expect(container.textContent).toContain("needs permission");
+  });
+
+  it("surfaces the rejection reason after the button is pressed", async () => {
+    const { container } = picker(refusedMidiPorts("Dismissed"));
+    await settle();
+
+    (container.querySelector("button") as HTMLButtonElement).dispatchEvent(
+      new MouseEvent("click", { bubbles: true })
+    );
+    await settle();
+
+    expect(container.textContent).toContain("Dismissed");
+    // A refusal is recoverable: site settings can be changed and the ask retried.
+    expect(container.querySelector("button")?.textContent).toBe("Try again");
+  });
+
+  it("says what it is doing while the browser decides", async () => {
+    // A promise that never settles: the prompt is up, or was suppressed.
+    const { container } = picker({
+      available: () => true,
+      permission: () => Promise.resolve("prompt"),
+      open: () => new Promise(() => {}),
+    });
+    await settle();
+
+    (container.querySelector("button") as HTMLButtonElement).dispatchEvent(
+      new MouseEvent("click", { bubbles: true })
+    );
+    await settle();
+
+    // Never blank: a blank panel is indistinguishable from a broken app.
+    expect(container.textContent).toContain("Waiting for permission");
   });
 });
 
@@ -66,10 +102,40 @@ describe("port selection", () => {
     expect(options(container)[1]?.textContent).toBe("Deluge — Synthstrom");
   });
 
-  it("tells the user when no outputs exist", async () => {
-    const { container } = picker(fakeMidiPorts([]).ports);
+  it("tells the user when no outputs exist, and offers another look", async () => {
+    const devices = fakeMidiPorts([]);
+    const { container } = picker(devices.ports);
     await settle();
     expect(container.textContent).toContain("No MIDI outputs found");
+
+    devices.attachQuietly([{ id: "a", name: "A", manufacturer: "" }]);
+    (container.querySelector("button") as HTMLButtonElement).dispatchEvent(
+      new MouseEvent("click", { bubbles: true })
+    );
+    await settle();
+
+    expect(container.querySelector("select")).not.toBeNull();
+  });
+
+  it("names the device it can only see an input for", async () => {
+    // The common Windows case: the hardware is there, but its output port is
+    // already open in another application.
+    const devices = fakeMidiPorts(
+      [],
+      "granted",
+      [{ id: "in-1", name: "AudioBox USB 96", manufacturer: "PreSonus" }]
+    );
+    const { container } = picker(devices.ports);
+    await settle();
+
+    expect(container.textContent).toContain("AudioBox USB 96");
+    expect(container.textContent).toContain("only be open in one application");
+  });
+
+  it("says nothing about inputs when there are none to report", async () => {
+    const { container } = picker(fakeMidiPorts([]).ports);
+    await settle();
+    expect(container.textContent).not.toContain("MIDI input");
   });
 
   it("chooses a port, and marks it selected without a value binding", async () => {

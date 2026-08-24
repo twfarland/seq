@@ -62,18 +62,34 @@ export interface OutputInfo {
 /** The set of MIDI ports currently attached, and a way to open one. */
 export interface MidiDirectory {
   list(): OutputInfo[];
+  /**
+   * Input ports. seq never reads MIDI in, so these are for diagnosis only:
+   * seeing a device's input but not its output separates "the browser cannot
+   * see this device" from "something else already has its output open".
+   */
+  inputs(): OutputInfo[];
   /** `undefined` if that port has since gone away. */
   open(id: string): MidiOut | undefined;
   /** Called when devices appear or disappear. Returns an unsubscribe. */
   onChange(fn: () => void): () => void;
 }
 
+/** What the environment will do if asked for MIDI access. */
+export type MidiPermission = "granted" | "denied" | "prompt";
+
 export interface MidiPorts {
+  /** False when this environment has no MIDI at all. */
+  available(): boolean;
   /**
-   * Ask for access. `undefined` means this environment has no MIDI at all,
-   * which is a different answer from a rejected promise (refused permission).
+   * What would happen if we asked, without asking.
+   *
+   * `"prompt"` is the honest answer whenever the environment cannot say, which
+   * is most of them - so it is also the fallback. It means "a person should be
+   * the one to ask for this", and the application treats it that way.
    */
-  open(): Promise<MidiDirectory> | undefined;
+  permission(): Promise<MidiPermission>;
+  /** Ask. Rejects if refused. Only called when {@link available} is true. */
+  open(): Promise<MidiDirectory>;
 }
 
 // ---------- the sequencer, wherever it is ----------
