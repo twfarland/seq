@@ -9,7 +9,7 @@ import {
   stepsPerLoop,
   type Pattern,
 } from "./pattern";
-import type { SequencerEvent } from "./protocol";
+import type { SequencerEvent } from "./events";
 
 /**
  * The sequencer core: a pure state machine that turns wall-clock time into an

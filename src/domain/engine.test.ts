@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createSequencerEngine, type SequencerEngine } from "./engine";
 import { MIDI_CLOCK_PPQ, pulseIntervalMs, type Clip, type Pattern } from "./pattern";
-import type { SequencerEvent } from "./protocol";
+import type { SequencerEvent } from "./events";
 
 const BPM = 120;
 /** 120bpm at 24ppq => 20.833…ms per pulse. */

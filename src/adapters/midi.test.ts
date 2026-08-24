@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MidiSend } from "./midi";
+import { fakeMidiAccess, fakeMidiOutput } from "~/test/fakes";
+import { midiDirectory, MidiSend } from "./midi";
 
 function fakeOutput() {
   const send = vi.fn<(data: number[], time?: number) => void>();
@@ -93,5 +94,44 @@ describe("panic", () => {
       [0xb9, 123, 0],
       [0xb9, 120, 0],
     ]);
+  });
+});
+
+describe("the directory", () => {
+  it("describes each attached port, defaulting the fields drivers omit", () => {
+    const a = fakeMidiOutput({ id: "a", name: "Deluge" });
+    // Some drivers report neither, which is why the port describes itself.
+    const b = fakeMidiOutput({ id: "b", name: null, manufacturer: null });
+    const directory = midiDirectory(fakeMidiAccess([a.port, b.port]).access);
+
+    expect(directory.list()).toEqual([
+      { id: "a", name: "Deluge", manufacturer: "Test" },
+      { id: "b", name: "", manufacturer: "" },
+    ]);
+  });
+
+  it("opens a writer for a port, and nothing for one that has gone", () => {
+    const a = fakeMidiOutput({ id: "a" });
+    const directory = midiDirectory(fakeMidiAccess([a.port]).access);
+
+    directory.open("a")?.noteOn({ channel: 1, midiNote: 60, velocity: 100 });
+    expect(a.send).toHaveBeenCalledWith([0x90, 60, 100], undefined);
+    expect(directory.open("nope")).toBeUndefined();
+  });
+
+  it("reports hotplug, and unhooks when asked", () => {
+    const access = fakeMidiAccess([]);
+    const directory = midiDirectory(access.access);
+
+    let changes = 0;
+    const stop = directory.onChange(() => changes++);
+    access.setOutputs([fakeMidiOutput({ id: "a" }).port]);
+    expect(changes).toBe(1);
+    expect(directory.list()).toHaveLength(1);
+
+    stop();
+    access.setOutputs([]);
+    expect(changes).toBe(1);
+    expect(access.listenerCount).toBe(0);
   });
 });

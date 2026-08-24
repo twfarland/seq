@@ -1,5 +1,16 @@
+import type {
+  MidiDirectory,
+  MidiOut,
+  MidiPorts,
+  NoteOffMessage,
+  NoteOnMessage,
+  OutputInfo,
+} from "~/app/ports";
+
 /**
- * Thin, validating wrapper over a `MIDIOutput`.
+ * Web MIDI, behind the ports in `app/ports.ts`.
+ *
+ * {@link MidiSend} is a thin, validating wrapper over a `MIDIOutput`.
  *
  * Every method clamps its arguments before packing them into status bytes. Web
  * MIDI throws `TypeError` on out-of-range data, which inside the message pump
@@ -31,20 +42,7 @@ const clampByte = (value: number, max: number) => {
 const channelNibble = (channel: number) =>
   clampByte((Number.isFinite(channel) ? channel : 1) - 1, 15);
 
-export interface NoteOnMessage {
-  channel: number;
-  midiNote: number;
-  velocity: number;
-  time?: number;
-}
-
-export interface NoteOffMessage {
-  channel: number;
-  midiNote: number;
-  time?: number;
-}
-
-export class MidiSend {
+export class MidiSend implements MidiOut {
   constructor(private readonly output: MIDIOutput) {}
 
   /**
@@ -108,3 +106,37 @@ export class MidiSend {
     }
   }
 }
+
+/** How a `MIDIOutput` describes itself to whoever is choosing between them. */
+const describe = (output: MIDIOutput): OutputInfo => ({
+  id: output.id,
+  name: output.name ?? "",
+  manufacturer: output.manufacturer ?? "",
+});
+
+/**
+ * Ports are keyed by `MIDIPort.id`, not by name: names are not unique (two of
+ * the same interface report identically) and can be empty on some drivers.
+ */
+export function midiDirectory(access: MIDIAccess): MidiDirectory {
+  return {
+    list: () => Array.from(access.outputs.values(), describe),
+    open: (id) => {
+      const output = access.outputs.get(id);
+      return output ? new MidiSend(output) : undefined;
+    },
+    onChange: (fn) => {
+      access.addEventListener("statechange", fn);
+      return () => access.removeEventListener("statechange", fn);
+    },
+  };
+}
+
+export const webMidi: MidiPorts = {
+  open: () =>
+    // `sysex` is deliberately not requested: it triggers a stricter permission
+    // prompt and this app only ever sends channel-voice and real-time messages.
+    typeof navigator.requestMIDIAccess === "function"
+      ? navigator.requestMIDIAccess().then(midiDirectory)
+      : undefined,
+};

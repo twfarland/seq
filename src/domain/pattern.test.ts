@@ -9,7 +9,7 @@ import {
   stepsPerLoop,
   type Clip,
 } from "./pattern";
-import { emptyClip, emptyLane, fourOnTheFloor } from "./patterns";
+import { emptyClip, emptyLane, fourOnTheFloor } from "./presets";
 
 const clip = (overrides: Partial<Clip> = {}): Clip => ({
   ...emptyClip("Test", 1),
